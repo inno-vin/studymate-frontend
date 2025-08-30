@@ -1,14 +1,15 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Send, Bot, FileText, Mic } from 'lucide-react';
+import { Send, Bot, FileText, Mic, MicOff } from 'lucide-react';
 import ChatMessage from './ChatMessage';
 
 const ChatInterface = ({ chatHistory, onSendMessage, isLoading, uploadedDocs }) => {
   const [message, setMessage] = useState('');
   const [isTyping, setIsTyping] = useState(false);
-  const [isListening, setIsListening] = useState(false); // mic popup state
+  const [listening, setListening] = useState(false);
   const messagesEndRef = useRef(null);
   const textareaRef = useRef(null);
+  const recognitionRef = useRef(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -31,7 +32,9 @@ const ChatInterface = ({ chatHistory, onSendMessage, isLoading, uploadedDocs }) 
     if (message.trim() && !isLoading) {
       onSendMessage(message.trim());
       setMessage('');
-      if (textareaRef.current) textareaRef.current.style.height = 'auto';
+      if (textareaRef.current) {
+        textareaRef.current.style.height = 'auto';
+      }
     }
   };
 
@@ -57,14 +60,36 @@ const ChatInterface = ({ chatHistory, onSendMessage, isLoading, uploadedDocs }) 
     });
   };
 
-  // 🎤 Mic click
-  const handleMicClick = () => {
-    setIsListening(true);
+  // 🎙️ Voice Assistant Logic
+  useEffect(() => {
+    if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      recognitionRef.current = new SpeechRecognition();
+      recognitionRef.current.continuous = false;
+      recognitionRef.current.interimResults = false;
+      recognitionRef.current.lang = 'en-US';
 
-    // Close popup after 3 seconds
-    setTimeout(() => {
-      setIsListening(false);
-    }, 3000);
+      recognitionRef.current.onresult = (event) => {
+        const transcript = event.results[0][0].transcript;
+        setMessage(transcript);
+        setListening(false);
+      };
+
+      recognitionRef.current.onend = () => {
+        setListening(false);
+      };
+    }
+  }, []);
+
+  const handleVoiceInput = () => {
+    if (!recognitionRef.current) return alert("Voice recognition not supported in this browser.");
+    if (!listening) {
+      recognitionRef.current.start();
+      setListening(true);
+    } else {
+      recognitionRef.current.stop();
+      setListening(false);
+    }
   };
 
   return (
@@ -106,7 +131,8 @@ const ChatInterface = ({ chatHistory, onSendMessage, isLoading, uploadedDocs }) 
                 Welcome to StudyMate!
               </h3>
               <p className="text-academic-600 max-w-md mx-auto">
-                Upload your academic documents and start asking questions.
+                Upload your academic documents and start asking questions. I'll help you understand 
+                the content and answer your queries based on the uploaded materials.
               </p>
             </motion.div>
           ) : (
@@ -134,32 +160,43 @@ const ChatInterface = ({ chatHistory, onSendMessage, isLoading, uploadedDocs }) 
             <div className="flex items-center space-x-1">
               <span className="text-sm text-academic-600">StudyMate is thinking</span>
               <div className="flex space-x-1">
-                <motion.div className="w-2 h-2 bg-primary-400 rounded-full"
+                <motion.div
+                  className="w-2 h-2 bg-primary-400 rounded-full"
                   animate={{ opacity: [0.4, 1, 0.4] }}
-                  transition={{ duration: 1.4, repeat: Infinity, delay: 0 }} />
-                <motion.div className="w-2 h-2 bg-primary-400 rounded-full"
+                  transition={{ duration: 1.4, repeat: Infinity, delay: 0 }}
+                />
+                <motion.div
+                  className="w-2 h-2 bg-primary-400 rounded-full"
                   animate={{ opacity: [0.4, 1, 0.4] }}
-                  transition={{ duration: 1.4, repeat: Infinity, delay: 0.2 }} />
-                <motion.div className="w-2 h-2 bg-primary-400 rounded-full"
+                  transition={{ duration: 1.4, repeat: Infinity, delay: 0.2 }}
+                />
+                <motion.div
+                  className="w-2 h-2 bg-primary-400 rounded-full"
                   animate={{ opacity: [0.4, 1, 0.4] }}
-                  transition={{ duration: 1.4, repeat: Infinity, delay: 0.4 }} />
+                  transition={{ duration: 1.4, repeat: Infinity, delay: 0.4 }}
+                />
               </div>
             </div>
           </motion.div>
         )}
+
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Listening Popup */}
+      {/* 🎤 Listening Popup */}
       <AnimatePresence>
-        {isListening && (
+        {listening && (
           <motion.div
-            initial={{ opacity: 0, y: 30 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 30 }}
-            className="absolute bottom-24 left-1/2 transform -translate-x-1/2 bg-primary-600 text-white px-6 py-3 rounded-xl shadow-lg"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50"
           >
-            🎤 Listening...
+            <div className="bg-white p-6 rounded-2xl shadow-lg text-center space-y-3">
+              <Mic className="w-8 h-8 text-red-500 mx-auto animate-pulse" />
+              <p className="text-lg font-semibold text-gray-700">Listening...</p>
+              <p className="text-sm text-gray-500">Speak now</p>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
@@ -168,15 +205,17 @@ const ChatInterface = ({ chatHistory, onSendMessage, isLoading, uploadedDocs }) 
       <div className="bg-white border-t border-academic-200 px-6 py-4">
         <form onSubmit={handleSubmit} className="flex items-end space-x-3">
           
-          {/* Mic button (left side) */}
+          {/* 🎙️ Voice Button (Left side) */}
           <motion.button
             type="button"
-            onClick={handleMicClick}
+            onClick={handleVoiceInput}
             whileHover={{ scale: 1.1 }}
-            whileTap={{ scale: 0.9 }}
-            className="p-3 rounded-lg bg-academic-100 text-primary-600"
+            whileTap={{ scale: 0.95 }}
+            className={`p-3 rounded-lg transition-all duration-200 ${
+              listening ? 'bg-red-500 text-white' : 'bg-academic-200 text-academic-600'
+            }`}
           >
-            <Mic className="w-5 h-5" />
+            {listening ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
           </motion.button>
 
           <div className="flex-1 relative">
@@ -194,7 +233,8 @@ const ChatInterface = ({ chatHistory, onSendMessage, isLoading, uploadedDocs }) 
               Press Enter to send, Shift+Enter for new line
             </div>
           </div>
-          
+
+          {/* Send Button */}
           <motion.button
             type="submit"
             disabled={!message.trim() || isLoading}
