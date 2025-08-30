@@ -4,7 +4,7 @@ import Navbar from './components/Navbar';
 import Sidebar from './components/Sidebar';
 import ChatInterface from './components/ChatInterface';
 import Footer from './components/Footer';
-import LoginGate from './components/LoginGate';
+import LoginGate from './components/LoginGate'; 
 
 function App() {
   const [uploadedDocs, setUploadedDocs] = useState([]);
