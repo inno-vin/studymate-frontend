@@ -1,3 +1,5 @@
+// src/App.js
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Navbar from './components/Navbar';
 import Sidebar from './components/Sidebar';
@@ -5,35 +7,90 @@ import ChatInterface from './components/ChatInterface';
 import Footer from './components/Footer';
 import LoginGate from './components/LoginGate';
 
+// Small inline X icon to avoid missing icon imports
+function XIcon(props) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width={16}
+      height={16}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      {...props}
+    >
+      <line x1="18" y1="6" x2="6" y2="18" />
+      <line x1="6" y1="6" x2="18" y2="18" />
+    </svg>
+  );
+}
+
+// Helpers
+const prettyBytes = (num) => {
+  if (!Number.isFinite(num)) return '0 B';
+  const UNITS = ['B', 'KB', 'MB', 'GB', 'TB'];
+  let u = 0;
+  let n = num;
+  while (n >= 1024 && u < UNITS.length - 1) {
+    n /= 1024;
+    u++;
+  }
+  return `${Math.round(n * 10) / 10} ${UNITS[u]}`;
+};
+
+const iconForMime = (mime) => {
+  if (!mime) return '📄';
+  if (mime.includes('pdf')) return '📕';
+  if (mime.includes('image')) return '🖼️';
+  if (mime.includes('msword') || mime.includes('officedocument')) return '📄';
+  if (mime.includes('zip') || mime.includes('compressed')) return '🗜️';
+  if (mime.includes('audio')) return '🎵';
+  if (mime.includes('video')) return '🎬';
+  return '📎';
+};
+
 function App() {
+  // safe access to window for SSR during build
+  const isClient = typeof window !== 'undefined';
+  const initialUsername = isClient ? localStorage.getItem('studymate_username') || '' : '';
+  const initialToken = isClient ? localStorage.getItem('studymate_token') : null;
+
   const [uploadedDocs, setUploadedDocs] = useState([]);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [chatHistory, setChatHistory] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [gateOpen, setGateOpen] = useState(false);
-  const [username, setUsername] = useState(localStorage.getItem('studymate_username') || '');
+  const [username, setUsername] = useState(initialUsername);
   const [chats, setChats] = useState([]);
   const [currentChatId, setCurrentChatId] = useState(null);
-  const [mobileView, setMobileView] = useState(window.innerWidth < 1024);
+  const [mobileView, setMobileView] = useState(isClient ? window.innerWidth < 1024 : false);
 
   const API_BASE = 'https://studymate-backend-beta.vercel.app';
 
   useEffect(() => {
-    const hasToken = Boolean(localStorage.getItem('studymate_token'));
-    const isGuest = localStorage.getItem('studymate_guest') === '1';
+    const hasToken = Boolean(isClient ? localStorage.getItem('studymate_token') : null);
+    const isGuest = isClient ? localStorage.getItem('studymate_guest') === '1' : false;
     if (!hasToken && !isGuest) setGateOpen(true);
     if (hasToken) {
       fetchChats();
-      setUsername(localStorage.getItem('studymate_username') || '');
+      setUsername(isClient ? localStorage.getItem('studymate_username') || '' : '');
     }
 
-    const handleResize = () => setMobileView(window.innerWidth < 1024);
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
+    const handleResize = () => {
+      if (!isClient) return;
+      setMobileView(window.innerWidth < 1024);
+    };
+    if (isClient) window.addEventListener('resize', handleResize);
+    return () => {
+      if (isClient) window.removeEventListener('resize', handleResize);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const authHeaders = () => {
-    const token = localStorage.getItem('studymate_token');
+    const token = typeof window !== 'undefined' ? localStorage.getItem('studymate_token') : null;
     return token
       ? { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', Accept: 'application/json' }
       : { Accept: 'application/json' };
@@ -47,6 +104,8 @@ function App() {
       const data = await res.json();
       if (res.ok && data.ok !== false) setChats(data.chats || []);
     } catch (error) {
+      // keep silent but log
+      // eslint-disable-next-line no-console
       console.error('Error fetching chats:', error);
     }
   }
@@ -71,6 +130,7 @@ function App() {
         return data.chatId;
       }
     } catch (error) {
+      // eslint-disable-next-line no-console
       console.error('Error creating chat:', error);
     }
     return null;
@@ -87,6 +147,7 @@ function App() {
       });
       fetchChats();
     } catch (error) {
+      // eslint-disable-next-line no-console
       console.error('Error appending messages:', error);
     }
   }
@@ -103,6 +164,7 @@ function App() {
         if (mobileView) setIsSidebarOpen(false);
       }
     } catch (error) {
+      // eslint-disable-next-line no-console
       console.error('Error loading chat:', error);
     }
   }
@@ -110,6 +172,7 @@ function App() {
   const startNewChat = () => {
     setCurrentChatId(null);
     setChatHistory([]);
+    setUploadedDocs([]);
     if (mobileView) setIsSidebarOpen(false);
   };
 
@@ -129,7 +192,7 @@ function App() {
   };
 
   const sendMessage = async (message) => {
-    if (!message.trim()) return;
+    if (!message || !message.trim()) return;
 
     const userMessage = {
       id: Date.now(),
@@ -150,7 +213,7 @@ function App() {
         formData.append('pdfs', doc.file);
       });
 
-      const token = localStorage.getItem('studymate_token');
+      const token = typeof window !== 'undefined' ? localStorage.getItem('studymate_token') : null;
       const headers = token ? { Authorization: `Bearer ${token}`, Accept: 'application/json' } : { Accept: 'application/json' };
 
       const res = await fetch(`${API_BASE}/api/chat`, { method: 'POST', headers, body: formData });
@@ -203,13 +266,16 @@ function App() {
 
   const onLoginClick = () => setGateOpen(true);
   const onLogoutClick = () => {
-    localStorage.removeItem('studymate_token');
-    localStorage.removeItem('studymate_username');
-    localStorage.removeItem('studymate_guest');
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('studymate_token');
+      localStorage.removeItem('studymate_username');
+      localStorage.removeItem('studymate_guest');
+    }
     setUsername('');
     setCurrentChatId(null);
     setChats([]);
     setChatHistory([]);
+    setUploadedDocs([]);
   };
 
   return (
@@ -224,7 +290,7 @@ function App() {
       />
 
       <div className="flex flex-1 overflow-hidden relative">
-        {/* Desktop Sidebar */}
+        {/* Desktop Sidebar - Simplified without file upload */}
         <div className={`hidden lg:flex lg:flex-col w-80 bg-white border-r border-academic-200 flex-shrink-0 ${isSidebarOpen ? 'flex' : 'hidden'}`}>
           <div className="p-4 border-b border-academic-200">
             <div className="flex items-center justify-between mb-3">
@@ -250,7 +316,7 @@ function App() {
                   >
                     <div className="font-medium truncate">{c.title || 'Untitled'}</div>
                     <div className="text-xs text-academic-500">
-                      {new Date(c.updatedAt).toLocaleDateString()}
+                      {c.updatedAt ? new Date(c.updatedAt).toLocaleDateString() : ''}
                     </div>
                   </button>
                 ))
@@ -261,12 +327,46 @@ function App() {
               )}
             </div>
           </div>
-          <div className="flex-1">
-            <Sidebar
-              uploadedDocs={uploadedDocs}
-              onFileUpload={handleFileUpload}
-              onRemoveDoc={removeDocument}
-            />
+
+          {/* Uploaded files list in sidebar */}
+          <div className="p-4 border-t border-academic-200">
+            <h3 className="text-sm font-semibold text-academic-700 mb-3">Uploaded Files</h3>
+            {uploadedDocs.length === 0 ? (
+              <div className="text-xs text-academic-500 text-center py-4">
+                No files added yet.
+              </div>
+            ) : (
+              <div className="space-y-2 max-h-64 overflow-y-auto">
+                {uploadedDocs.map((doc) => (
+                  <div
+                    key={doc.id}
+                    className="flex items-center justify-between bg-academic-50 border border-academic-200 rounded-lg px-3 py-2"
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <div className="text-academic-500">
+                        {iconForMime(doc.file?.type)}
+                      </div>
+                      <div className="min-w-0">
+                        <div className="text-sm font-medium text-academic-800 truncate">
+                          {doc.name}
+                        </div>
+                        <div className="text-xs text-academic-500">
+                          {prettyBytes(doc.size)}
+                        </div>
+                      </div>
+                    </div>
+                    <button
+                      className="p-1 rounded hover:bg-academic-200 text-academic-500"
+                      onClick={() => removeDocument(doc.id)}
+                      aria-label="Remove file"
+                      title="Remove file"
+                    >
+                      <XIcon />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 
@@ -315,7 +415,7 @@ function App() {
                         >
                           <div className="font-medium truncate">{c.title || 'Untitled'}</div>
                           <div className="text-xs text-academic-500">
-                            {new Date(c.updatedAt).toLocaleDateString()}
+                            {c.updatedAt ? new Date(c.updatedAt).toLocaleDateString() : ''}
                           </div>
                         </button>
                       ))
@@ -327,12 +427,45 @@ function App() {
                   </div>
                 </div>
 
-                <div className="flex-1 overflow-y-auto">
-                  <Sidebar
-                    uploadedDocs={uploadedDocs}
-                    onFileUpload={handleFileUpload}
-                    onRemoveDoc={removeDocument}
-                  />
+                {/* Uploaded files list in mobile sidebar */}
+                <div className="p-4 border-t border-academic-200">
+                  <h3 className="text-sm font-semibold text-academic-700 mb-3">Uploaded Files</h3>
+                  {uploadedDocs.length === 0 ? (
+                    <div className="text-xs text-academic-500 text-center py-4">
+                      No files added yet.
+                    </div>
+                  ) : (
+                    <div className="space-y-2 max-h-48 overflow-y-auto">
+                      {uploadedDocs.map((doc) => (
+                        <div
+                          key={doc.id}
+                          className="flex items-center justify-between bg-academic-50 border border-academic-200 rounded-lg px-3 py-2"
+                        >
+                          <div className="flex items-center gap-2 min-w-0">
+                            <div className="text-academic-500">
+                              {iconForMime(doc.file?.type)}
+                            </div>
+                            <div className="min-w-0">
+                              <div className="text-sm font-medium text-academic-800 truncate">
+                                {doc.name}
+                              </div>
+                              <div className="text-xs text-academic-500">
+                                {prettyBytes(doc.size)}
+                              </div>
+                            </div>
+                          </div>
+                          <button
+                            className="p-1 rounded hover:bg-academic-200 text-academic-500"
+                            onClick={() => removeDocument(doc.id)}
+                            aria-label="Remove file"
+                            title="Remove file"
+                          >
+                            <XIcon />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </motion.div>
             </>
@@ -346,6 +479,8 @@ function App() {
             onSendMessage={sendMessage}
             isLoading={isLoading}
             uploadedDocs={uploadedDocs}
+            onFileUpload={handleFileUpload}
+            onRemoveDoc={removeDocument}
           />
         </div>
       </div>
@@ -356,7 +491,7 @@ function App() {
         isOpen={gateOpen}
         onClose={() => {
           setGateOpen(false);
-          setUsername(localStorage.getItem('studymate_username') || '');
+          setUsername(typeof window !== 'undefined' ? localStorage.getItem('studymate_username') || '' : '');
           fetchChats();
         }}
         onGuest={() => {}}
