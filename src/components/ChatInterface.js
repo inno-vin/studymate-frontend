@@ -1,29 +1,30 @@
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Send, Bot, FileText, Upload, X, Paperclip } from 'lucide-react';
+import { Send, Bot, FileText, Mic, MicOff, Volume2, VolumeX } from 'lucide-react';
+import ChatMessage from './ChatMessage';
 
-const prettyBytes = (bytes = 0) => {
-  if (!bytes) return '0 Bytes';
-  const k = 1024;
-  const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`;
-};
-
-const iconForMime = (mime = '') => {
-  if (mime.includes('pdf')) return <FileText className="w-4 h-4" />;
-  return <FileText className="w-4 h-4" />;
-};
-
-const ChatInterface = ({ chatHistory, onSendMessage, isLoading, uploadedDocs, onFileUpload, onRemoveDoc, maxFiles = 10 }) => {
+const ChatInterface = ({ chatHistory, onSendMessage, isLoading, uploadedDocs }) => {
   const [message, setMessage] = useState('');
   const [isTyping, setIsTyping] = useState(false);
-  const [isDragOver, setIsDragOver] = useState(false);
-  const [error, setError] = useState('');
-  const [showFileUpload, setShowFileUpload] = useState(false);
+  const [isListening, setIsListening] = useState(false);
+  const [isSpeaking, setIsSpeaking] = useState(false);
+  const [speechSupported, setSpeechSupported] = useState(true);
   const messagesEndRef = useRef(null);
   const textareaRef = useRef(null);
-  const fileInputRef = useRef(null);
+  const recognitionRef = useRef(null);
+  const synthesisRef = useRef(null);
+
+  // Check if speech APIs are supported
+  useEffect(() => {
+    if (!('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)) {
+      setSpeechSupported(false);
+      console.warn('Speech recognition not supported in this browser');
+    }
+    
+    if (!('speechSynthesis' in window)) {
+      console.warn('Speech synthesis not supported in this browser');
+    }
+  }, []);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -41,52 +42,102 @@ const ChatInterface = ({ chatHistory, onSendMessage, isLoading, uploadedDocs, on
     }
   }, [isLoading]);
 
-  // File upload functions
-  const enforceLimit = (files) => {
-    const remaining = Math.max(0, maxFiles - uploadedDocs.length);
-    return remaining > 0 ? files.slice(0, remaining) : [];
+  // Initialize speech recognition
+  const initSpeechRecognition = () => {
+    if (!speechSupported) return;
+    
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    recognitionRef.current = new SpeechRecognition();
+    recognitionRef.current.continuous = false;
+    recognitionRef.current.interimResults = true;
+    recognitionRef.current.lang = 'en-US';
+
+    recognitionRef.current.onstart = () => {
+      setIsListening(true);
+    };
+
+    recognitionRef.current.onresult = (event) => {
+      const transcript = Array.from(event.results)
+        .map(result => result[0])
+        .map(result => result.transcript)
+        .join('');
+      
+      setMessage(transcript);
+    };
+
+    recognitionRef.current.onerror = (event) => {
+      console.error('Speech recognition error', event.error);
+      setIsListening(false);
+    };
+
+    recognitionRef.current.onend = () => {
+      setIsListening(false);
+    };
   };
 
-  const validateFiles = (files) => {
-    const MAX = 25 * 1024 * 1024; // 25MB to match backend
-    const over = files.find(f => f.size > MAX);
-    if (over) {
-      setError(`"${over.name}" exceeds 25MB limit.`);
-      return files.filter(f => f.size <= MAX);
+  // Toggle speech recognition
+  const toggleListening = () => {
+    if (!speechSupported) {
+      alert('Speech recognition is not supported in your browser');
+      return;
     }
-    return files;
+
+    if (isListening) {
+      recognitionRef.current.stop();
+    } else {
+      if (!recognitionRef.current) {
+        initSpeechRecognition();
+      }
+      recognitionRef.current.start();
+    }
   };
 
-  const handleDragOver = (e) => {
-    e.preventDefault();
-    setIsDragOver(true);
-    setError('');
+  // Speak text using speech synthesis
+  const speakText = (text) => {
+    if (!('speechSynthesis' in window)) return;
+    
+    // Stop any ongoing speech
+    window.speechSynthesis.cancel();
+    
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.rate = 0.9;
+    utterance.pitch = 1;
+    utterance.volume = 1;
+    
+    utterance.onstart = () => {
+      setIsSpeaking(true);
+    };
+    
+    utterance.onend = () => {
+      setIsSpeaking(false);
+    };
+    
+    utterance.onerror = () => {
+      setIsSpeaking(false);
+    };
+    
+    synthesisRef.current = utterance;
+    window.speechSynthesis.speak(utterance);
   };
 
-  const handleDragLeave = (e) => {
-    e.preventDefault();
-    setIsDragOver(false);
+  // Stop speaking
+  const stopSpeaking = () => {
+    if (window.speechSynthesis) {
+      window.speechSynthesis.cancel();
+      setIsSpeaking(false);
+    }
   };
 
-  const handleDrop = (e) => {
-    e.preventDefault();
-    setIsDragOver(false);
-    setError('');
-    const files = Array.from(e.dataTransfer.files || []);
-    if (!files.length) return;
-    const valid = validateFiles(files);
-    const bounded = enforceLimit(valid);
-    if (bounded.length) onFileUpload(bounded);
-  };
-
-  const handleFileSelect = (e) => {
-    const files = Array.from(e.target.files || []);
-    setError('');
-    const valid = validateFiles(files);
-    const bounded = enforceLimit(valid);
-    if (bounded.length) onFileUpload(bounded);
-    if (fileInputRef.current) fileInputRef.current.value = '';
-  };
+  // Auto-speak the last assistant message
+  useEffect(() => {
+    if (chatHistory.length > 0) {
+      const lastMessage = chatHistory[chatHistory.length - 1];
+      if (lastMessage.role === 'assistant' && !lastMessage.isError) {
+        // Speak the assistant's response
+        speakText(lastMessage.content);
+      }
+    }
+  }, [chatHistory]);
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -140,14 +191,39 @@ const ChatInterface = ({ chatHistory, onSendMessage, isLoading, uploadedDocs, on
             </p>
           </div>
           
-          {uploadedDocs.length > 0 && (
+          <div className="flex items-center space-x-3">
+            {uploadedDocs.length > 0 && (
+              <div className="flex items-center space-x-2">
+                <FileText className="w-4 h-4 text-primary-500" />
+                <span className="text-sm text-academic-600">
+                  PDF Context Active
+                </span>
+              </div>
+            )}
+            
+            {/* Voice controls */}
             <div className="flex items-center space-x-2">
-              <FileText className="w-4 h-4 text-primary-500" />
-              <span className="text-sm text-academic-600">
-                PDF Context Active
-              </span>
+              <button
+                onClick={isSpeaking ? stopSpeaking : () => {
+                  const lastAssistantMessage = [...chatHistory]
+                    .reverse()
+                    .find(msg => msg.role === 'assistant' && !msg.isError);
+                  
+                  if (lastAssistantMessage) {
+                    speakText(lastAssistantMessage.content);
+                  }
+                }}
+                disabled={!chatHistory.some(msg => msg.role === 'assistant' && !msg.isError)}
+                className={`p-2 rounded-full ${isSpeaking 
+                  ? 'bg-red-100 text-red-600' 
+                  : 'bg-academic-100 text-academic-600 hover:bg-academic-200'
+                } ${!chatHistory.some(msg => msg.role === 'assistant' && !msg.isError) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                title={isSpeaking ? 'Stop speaking' : 'Read last response'}
+              >
+                {isSpeaking ? <VolumeX size={16} /> : <Volume2 size={16} />}
+              </button>
             </div>
-          )}
+          </div>
         </div>
       </div>
 
@@ -168,34 +244,20 @@ const ChatInterface = ({ chatHistory, onSendMessage, isLoading, uploadedDocs, on
                 Upload your academic documents and start asking questions. I'll help you understand 
                 the content and answer your queries based on the uploaded materials.
               </p>
+              {speechSupported && (
+                <p className="text-academic-500 text-sm mt-4">
+                  Use the microphone button to ask questions by voice
+                </p>
+              )}
             </motion.div>
           ) : (
             chatHistory.map((msg, index) => (
-              <div
+              <ChatMessage
                 key={msg.id}
-                className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
-              >
-                <div className={`max-w-3/4 rounded-lg p-4 ${msg.role === 'user' ? 'bg-primary-600 text-white' : 'bg-academic-100 text-academic-800'}`}>
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <p className="whitespace-pre-wrap">{msg.content}</p>
-                      {msg.sources && msg.sources.length > 0 && (
-                        <div className="mt-2 text-xs">
-                          <p className="font-medium">Sources:</p>
-                          <ul className="list-disc list-inside">
-                            {msg.sources.map((source, i) => (
-                              <li key={i}>{source}</li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
-                    </div>
-                    <span className="text-xs opacity-70 ml-2 mt-1">
-                      {formatTimestamp(msg.timestamp)}
-                    </span>
-                  </div>
-                </div>
-              </div>
+                message={msg}
+                formatTimestamp={formatTimestamp}
+                isLast={index === chatHistory.length - 1}
+              />
             ))
           )}
         </AnimatePresence>
@@ -233,111 +295,45 @@ const ChatInterface = ({ chatHistory, onSendMessage, isLoading, uploadedDocs, on
           </motion.div>
         )}
 
+        {/* Listening Indicator */}
+        {isListening && (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="flex items-center space-x-3 p-4 bg-blue-50 rounded-lg border border-blue-200"
+          >
+            <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+              <Mic className="w-4 h-4 text-blue-600" />
+            </div>
+            <div className="flex items-center space-x-1">
+              <span className="text-sm text-blue-600">Listening...</span>
+              <div className="flex space-x-1">
+                <motion.div
+                  className="w-2 h-2 bg-blue-400 rounded-full"
+                  animate={{ scale: [1, 1.5, 1] }}
+                  transition={{ duration: 1, repeat: Infinity, delay: 0 }}
+                />
+                <motion.div
+                  className="w-2 h-2 bg-blue-400 rounded-full"
+                  animate={{ scale: [1, 1.5, 1] }}
+                  transition={{ duration: 1, repeat: Infinity, delay: 0.2 }}
+                />
+                <motion.div
+                  className="w-2 h-2 bg-blue-400 rounded-full"
+                  animate={{ scale: [1, 1.5, 1] }}
+                  transition={{ duration: 1, repeat: Infinity, delay: 0.4 }}
+                />
+              </div>
+            </div>
+          </motion.div>
+        )}
+
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Message Input with File Upload */}
+      {/* Message Input */}
       <div className="bg-white border-t border-academic-200 px-6 py-4">
-        {/* File Upload Area */}
-        <AnimatePresence>
-          {showFileUpload && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-              exit={{ opacity: 0, height: 0 }}
-              className="mb-4 overflow-hidden"
-            >
-              <div
-                className={`relative border-2 border-dashed rounded-lg p-4 text-center transition-all duration-200 ${
-                  isDragOver ? 'border-primary-400 bg-primary-50' : 'border-academic-300 hover:border-academic-400'
-                }`}
-                onDragOver={handleDragOver}
-                onDragLeave={handleDragLeave}
-                onDrop={handleDrop}
-              >
-                <Upload className={`w-6 h-6 mx-auto mb-2 ${isDragOver ? 'text-primary-500' : 'text-academic-400'}`} />
-                <p className="text-sm text-academic-700">
-                  Drag & drop files here, or
-                </p>
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  className="mt-2 text-sm px-3 py-1 rounded bg-primary-600 text-white hover:bg-primary-700 transition-colors"
-                >
-                  Browse files
-                </button>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  multiple
-                  className="hidden"
-                  onChange={handleFileSelect}
-                />
-                <p className="mt-2 text-xs text-academic-500">
-                  Up to {maxFiles} files, 25MB each.
-                </p>
-                <AnimatePresence>
-                  {error && (
-                    <motion.div
-                      initial={{ opacity: 0, y: 8 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -8 }}
-                      className="mt-2 text-xs text-red-600"
-                    >
-                      {error}
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </div>
-
-              {/* Uploaded files list */}
-              {uploadedDocs.length > 0 && (
-                <div className="mt-3 space-y-2 max-h-32 overflow-y-auto">
-                  {uploadedDocs.map((doc) => (
-                    <div
-                      key={doc.id}
-                      className="flex items-center justify-between bg-academic-50 border border-academic-200 rounded-lg px-3 py-2"
-                    >
-                      <div className="flex items-center gap-2 min-w-0">
-                        <div className="text-academic-500">
-                          {iconForMime(doc.file?.type)}
-                        </div>
-                        <div className="min-w-0">
-                          <div className="text-sm font-medium text-academic-800 truncate">
-                            {doc.name}
-                          </div>
-                          <div className="text-xs text-academic-500">
-                            {doc.file?.type || 'application/octet-stream'} • {prettyBytes(doc.size)}
-                          </div>
-                        </div>
-                      </div>
-                      <button
-                        className="p-1 rounded hover:bg-academic-200 text-academic-500"
-                        onClick={() => onRemoveDoc(doc.id)}
-                        aria-label="Remove file"
-                        title="Remove file"
-                      >
-                        <X className="w-4 h-4" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </motion.div>
-          )}
-        </AnimatePresence>
-
         <form onSubmit={handleSubmit} className="flex items-end space-x-3">
-          <button
-            type="button"
-            onClick={() => setShowFileUpload(!showFileUpload)}
-            className={`p-2.5 rounded-lg transition-all duration-200 ${
-              showFileUpload ? 'bg-primary-600 text-white' : 'bg-academic-200 text-academic-600 hover:bg-academic-300'
-            }`}
-          >
-            <Paperclip className="w-5 h-5" />
-          </button>
-          
           <div className="flex-1 relative">
             <textarea
               ref={textareaRef}
@@ -345,7 +341,7 @@ const ChatInterface = ({ chatHistory, onSendMessage, isLoading, uploadedDocs, on
               onChange={handleTextareaChange}
               onKeyDown={handleKeyDown}
               placeholder="Ask a question about your documents..."
-              className="input-field resize-none min-h-[44px] max-h-32 overflow-y-auto w-full"
+              className="input-field resize-none min-h-[44px] max-h-32 overflow-y-auto"
               rows={1}
               disabled={isLoading}
             />
@@ -354,6 +350,25 @@ const ChatInterface = ({ chatHistory, onSendMessage, isLoading, uploadedDocs, on
             </div>
           </div>
           
+          {/* Microphone Button */}
+          {speechSupported && (
+            <motion.button
+              type="button"
+              onClick={toggleListening}
+              disabled={isLoading}
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              className={`p-3 rounded-lg transition-all duration-200 ${
+                isListening
+                  ? 'bg-red-600 hover:bg-red-700 text-white'
+                  : 'bg-academic-200 hover:bg-academic-300 text-academic-700'
+              } ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
+            >
+              {isListening ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
+            </motion.button>
+          )}
+          
+          {/* Send Button */}
           <motion.button
             type="submit"
             disabled={!message.trim() || isLoading}
