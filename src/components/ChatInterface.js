@@ -1,40 +1,13 @@
-import React, { useRef, useState, useEffect } from 'react';
+  import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Send, Bot, FileText, Upload, X, Paperclip, Mic, MicOff } from 'lucide-react';
+import { Send, Bot, FileText } from 'lucide-react';
+import ChatMessage from './ChatMessage';
 
-const prettyBytes = (bytes = 0) => {
-  if (!bytes) return '0 Bytes';
-  const k = 1024;
-  const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`;
-};
-
-const iconForMime = (mime = '') => {
-  if (mime.includes('pdf')) return <FileText className="w-4 h-4" />;
-  return <FileText className="w-4 h-4" />;
-};
-
-const ChatInterface = ({
-  chatHistory,
-  onSendMessage,
-  isLoading,
-  uploadedDocs,
-  onFileUpload,
-  onRemoveDoc,
-  maxFiles = 10,
-}) => {
+const ChatInterface = ({ chatHistory, onSendMessage, isLoading, uploadedDocs }) => {
   const [message, setMessage] = useState('');
   const [isTyping, setIsTyping] = useState(false);
-  const [isDragOver, setIsDragOver] = useState(false);
-  const [error, setError] = useState('');
-  const [showFileUpload, setShowFileUpload] = useState(false);
-  const [isListening, setIsListening] = useState(false);
-
   const messagesEndRef = useRef(null);
   const textareaRef = useRef(null);
-  const fileInputRef = useRef(null);
-  const recognitionRef = useRef(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -45,85 +18,20 @@ const ChatInterface = ({
   }, [chatHistory]);
 
   useEffect(() => {
-    setIsTyping(isLoading);
+    if (isLoading) {
+      setIsTyping(true);
+    } else {
+      setIsTyping(false);
+    }
   }, [isLoading]);
-
-  // Setup SpeechRecognition
-  useEffect(() => {
-    const SpeechRecognition =
-      window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (SpeechRecognition) {
-      recognitionRef.current = new SpeechRecognition();
-      recognitionRef.current.continuous = false;
-      recognitionRef.current.interimResults = true;
-      recognitionRef.current.lang = 'en-US';
-
-      recognitionRef.current.onresult = (event) => {
-        let transcript = '';
-        for (let i = event.resultIndex; i < event.results.length; ++i) {
-          transcript += event.results[i][0].transcript;
-        }
-        setMessage(transcript);
-      };
-
-      recognitionRef.current.onend = () => {
-        setIsListening(false);
-      };
-    }
-  }, []);
-
-  // File upload functions
-  const enforceLimit = (files) => {
-    const remaining = Math.max(0, maxFiles - uploadedDocs.length);
-    return remaining > 0 ? files.slice(0, remaining) : [];
-  };
-
-  const validateFiles = (files) => {
-    const MAX = 25 * 1024 * 1024; // 25MB
-    const over = files.find((f) => f.size > MAX);
-    if (over) {
-      setError(`"${over.name}" exceeds 25MB limit.`);
-      return files.filter((f) => f.size <= MAX);
-    }
-    return files;
-  };
-
-  const handleDragOver = (e) => {
-    e.preventDefault();
-    setIsDragOver(true);
-    setError('');
-  };
-
-  const handleDragLeave = (e) => {
-    e.preventDefault();
-    setIsDragOver(false);
-  };
-
-  const handleDrop = (e) => {
-    e.preventDefault();
-    setIsDragOver(false);
-    setError('');
-    const files = Array.from(e.dataTransfer.files || []);
-    if (!files.length) return;
-    const valid = validateFiles(files);
-    const bounded = enforceLimit(valid);
-    if (bounded.length) onFileUpload(bounded);
-  };
-
-  const handleFileSelect = (e) => {
-    const files = Array.from(e.target.files || []);
-    setError('');
-    const valid = validateFiles(files);
-    const bounded = enforceLimit(valid);
-    if (bounded.length) onFileUpload(bounded);
-    if (fileInputRef.current) fileInputRef.current.value = '';
-  };
 
   const handleSubmit = (e) => {
     e.preventDefault();
     if (message.trim() && !isLoading) {
       onSendMessage(message.trim());
       setMessage('');
+      
+      // Reset textarea height
       if (textareaRef.current) {
         textareaRef.current.style.height = 'auto';
       }
@@ -139,55 +47,45 @@ const ChatInterface = ({
 
   const handleTextareaChange = (e) => {
     setMessage(e.target.value);
+    
+    // Auto-resize textarea
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
       textareaRef.current.style.height = `${e.target.scrollHeight}px`;
     }
   };
 
-  const handleMicClick = () => {
-    if (!recognitionRef.current) {
-      alert('Speech recognition not supported in this browser.');
-      return;
-    }
-    if (isListening) {
-      recognitionRef.current.stop();
-      setIsListening(false);
-    } else {
-      recognitionRef.current.start();
-      setIsListening(true);
-    }
-  };
-
   const formatTimestamp = (timestamp) => {
-    return new Date(timestamp).toLocaleTimeString([], {
-      hour: '2-digit',
-      minute: '2-digit',
+    return new Date(timestamp).toLocaleTimeString([], { 
+      hour: '2-digit', 
+      minute: '2-digit' 
     });
   };
 
   return (
     <div className="flex flex-col h-full">
       {/* Chat Header */}
-      <div className="bg-white border-b border-academic-200 px-6 py-4 flex justify-between items-center">
-        <div>
-          <h2 className="text-lg font-semibold text-academic-900">
-            Chat with StudyMate
-          </h2>
-          <p className="text-sm text-academic-600">
-            {uploadedDocs.length > 0
-              ? `${uploadedDocs.length} document${
-                  uploadedDocs.length > 1 ? 's' : ''
-                } loaded`
-              : 'No documents loaded'}
-          </p>
-        </div>
-        {uploadedDocs.length > 0 && (
-          <div className="flex items-center space-x-2">
-            <FileText className="w-4 h-4 text-primary-500" />
-            <span className="text-sm text-academic-600">PDF Context Active</span>
+      <div className="bg-white border-b border-academic-200 px-6 py-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-lg font-semibold text-academic-900">Chat with StudyMate</h2>
+            <p className="text-sm text-academic-600">
+              {uploadedDocs.length > 0 
+                ? `${uploadedDocs.length} document${uploadedDocs.length > 1 ? 's' : ''} loaded`
+                : 'No documents loaded'
+              }
+            </p>
           </div>
-        )}
+          
+          {uploadedDocs.length > 0 && (
+            <div className="flex items-center space-x-2">
+              <FileText className="w-4 h-4 text-primary-500" />
+              <span className="text-sm text-academic-600">
+                PDF Context Active
+              </span>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Chat Messages */}
@@ -204,45 +102,18 @@ const ChatInterface = ({
                 Welcome to StudyMate!
               </h3>
               <p className="text-academic-600 max-w-md mx-auto">
-                Upload your academic documents and start asking questions. I'll
-                help you understand the content and answer your queries.
+                Upload your academic documents and start asking questions. I'll help you understand 
+                the content and answer your queries based on the uploaded materials.
               </p>
             </motion.div>
           ) : (
-            chatHistory.map((msg) => (
-              <div
+            chatHistory.map((msg, index) => (
+              <ChatMessage
                 key={msg.id}
-                className={`flex ${
-                  msg.role === 'user' ? 'justify-end' : 'justify-start'
-                }`}
-              >
-                <div
-                  className={`max-w-3/4 rounded-lg p-4 ${
-                    msg.role === 'user'
-                      ? 'bg-primary-600 text-white'
-                      : 'bg-academic-100 text-academic-800'
-                  }`}
-                >
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <p className="whitespace-pre-wrap">{msg.content}</p>
-                      {msg.sources && msg.sources.length > 0 && (
-                        <div className="mt-2 text-xs">
-                          <p className="font-medium">Sources:</p>
-                          <ul className="list-disc list-inside">
-                            {msg.sources.map((source, i) => (
-                              <li key={i}>{source}</li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
-                    </div>
-                    <span className="text-xs opacity-70 ml-2 mt-1">
-                      {formatTimestamp(msg.timestamp)}
-                    </span>
-                  </div>
-                </div>
-              </div>
+                message={msg}
+                formatTimestamp={formatTimestamp}
+                isLast={index === chatHistory.length - 1}
+              />
             ))
           )}
         </AnimatePresence>
@@ -258,9 +129,7 @@ const ChatInterface = ({
               <Bot className="w-4 h-4 text-primary-600" />
             </div>
             <div className="flex items-center space-x-1">
-              <span className="text-sm text-academic-600">
-                StudyMate is thinking
-              </span>
+              <span className="text-sm text-academic-600">StudyMate is thinking</span>
               <div className="flex space-x-1">
                 <motion.div
                   className="w-2 h-2 bg-primary-400 rounded-full"
@@ -281,71 +150,13 @@ const ChatInterface = ({
             </div>
           </motion.div>
         )}
+
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Listening Popup */}
-      <AnimatePresence>
-        {isListening && (
-          <motion.div
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.9 }}
-            className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50"
-          >
-            <motion.div className="bg-white rounded-2xl p-6 shadow-xl flex flex-col items-center">
-              <Mic className="w-10 h-10 text-primary-600 animate-pulse" />
-              <p className="mt-3 text-lg font-medium text-academic-800">
-                Listening...
-              </p>
-              <p className="text-sm text-academic-500">
-                Speak now and we’ll capture your message
-              </p>
-              <button
-                onClick={handleMicClick}
-                className="mt-4 px-4 py-2 rounded bg-red-500 text-white hover:bg-red-600"
-              >
-                Stop
-              </button>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Input Bar */}
+      {/* Message Input */}
       <div className="bg-white border-t border-academic-200 px-6 py-4">
         <form onSubmit={handleSubmit} className="flex items-end space-x-3">
-          {/* File Upload Toggle */}
-          <button
-            type="button"
-            onClick={() => setShowFileUpload(!showFileUpload)}
-            className={`p-2.5 rounded-lg transition-all duration-200 ${
-              showFileUpload
-                ? 'bg-primary-600 text-white'
-                : 'bg-academic-200 text-academic-600 hover:bg-academic-300'
-            }`}
-          >
-            <Paperclip className="w-5 h-5" />
-          </button>
-
-          {/* Mic Button */}
-          <button
-            type="button"
-            onClick={handleMicClick}
-            className={`p-2.5 rounded-lg transition-all duration-200 ${
-              isListening
-                ? 'bg-red-500 text-white'
-                : 'bg-academic-200 text-academic-600 hover:bg-academic-300'
-            }`}
-          >
-            {isListening ? (
-              <MicOff className="w-5 h-5" />
-            ) : (
-              <Mic className="w-5 h-5" />
-            )}
-          </button>
-
-          {/* Textarea */}
           <div className="flex-1 relative">
             <textarea
               ref={textareaRef}
@@ -353,13 +164,15 @@ const ChatInterface = ({
               onChange={handleTextareaChange}
               onKeyDown={handleKeyDown}
               placeholder="Ask a question about your documents..."
-              className="input-field resize-none min-h-[44px] max-h-32 overflow-y-auto w-full"
+              className="input-field resize-none min-h-[44px] max-h-32 overflow-y-auto"
               rows={1}
               disabled={isLoading}
             />
+            <div className="absolute bottom-2 right-2 text-xs text-academic-400">
+              Press Enter to send, Shift+Enter for new line
+            </div>
           </div>
-
-          {/* Send Button */}
+          
           <motion.button
             type="submit"
             disabled={!message.trim() || isLoading}
@@ -379,4 +192,4 @@ const ChatInterface = ({
   );
 };
 
-export default ChatInterface;
+export default ChatInterface; 
