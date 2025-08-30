@@ -201,56 +201,51 @@ const ChatInterface = ({ chatHistory, onSendMessage, isLoading, uploadedDocs }) 
         )}
       </AnimatePresence>
 
-      {/* Message Input */}
-      {/* <div className="bg-white border-t border-academic-200 px-6 py-4">*/}
-<div className="bg-white border-t border-academic-200 px-6 py-4 sticky bottom-0">
-        <form onSubmit={handleSubmit} className="flex items-end space-x-3">
-          
-          {/* 🎙️ Voice Button (Left side) */}
-          <motion.button
-            type="button"
-            onClick={handleVoiceInput}
-            whileHover={{ scale: 1.1 }}
-            whileTap={{ scale: 0.95 }}
-            className={`p-3 rounded-lg transition-all duration-200 ${
-              listening ? 'bg-red-500 text-white' : 'bg-academic-200 text-academic-600'
-            }`}
-          >
-            {listening ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
-          </motion.button>
+     <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-academic-200 px-6 py-4">
+  <form onSubmit={handleSubmit} className="flex items-end space-x-3">
+    {/* 🎙️ Voice Button */}
+    <motion.button
+      type="button"
+      onClick={handleVoiceInput}
+      whileHover={{ scale: 1.1 }}
+      whileTap={{ scale: 0.95 }}
+      className={`p-3 rounded-lg transition-all duration-200 ${
+        listening ? 'bg-red-500 text-white' : 'bg-academic-200 text-academic-600'
+      }`}
+    >
+      {listening ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
+    </motion.button>
 
-          <div className="flex-1 relative">
-            <textarea
-              ref={textareaRef}
-              value={message}
-              onChange={handleTextareaChange}
-              onKeyDown={handleKeyDown}
-              placeholder="Ask a question about your documents..."
-              className="input-field resize-none min-h-[44px] max-h-32 overflow-y-auto"
-              rows={1}
-              disabled={isLoading}
-            />
-            {/* <div className="absolute bottom-2 right-2 text-xs text-academic-400">
-              Press Enter to send, Shift+Enter for new line
-            </div>*/}
-          </div>
+    <div className="flex-1 relative">
+      <textarea
+        ref={textareaRef}
+        value={message}
+        onChange={handleTextareaChange}
+        onKeyDown={handleKeyDown}
+        placeholder="Ask a question about your documents..."
+        className="input-field resize-none min-h-[44px] max-h-32 overflow-y-auto"
+        rows={1}
+        disabled={isLoading}
+      />
+    </div>
 
-          {/* Send Button */}
-          <motion.button
-            type="submit"
-            disabled={!message.trim() || isLoading}
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            className={`p-3 rounded-lg transition-all duration-200 ${
-              message.trim() && !isLoading
-                ? 'bg-primary-600 hover:bg-primary-700 text-white'
-                : 'bg-academic-200 text-academic-400 cursor-not-allowed'
-            }`}
-          >
-            <Send className="w-5 h-5" />
-          </motion.button>
-        </form>
-      </div>
+    {/* Send Button */}
+    <motion.button
+      type="submit"
+      disabled={!message.trim() || isLoading}
+      whileHover={{ scale: 1.05 }}
+      whileTap={{ scale: 0.95 }}
+      className={`p-3 rounded-lg transition-all duration-200 ${
+        message.trim() && !isLoading
+          ? 'bg-primary-600 hover:bg-primary-700 text-white'
+          : 'bg-academic-200 text-academic-400 cursor-not-allowed'
+      }`}
+    >
+      <Send className="w-5 h-5" />
+    </motion.button>
+  </form>
+</div>
+
     </div>
   );
 };
