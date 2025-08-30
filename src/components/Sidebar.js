@@ -161,4 +161,4 @@ const Sidebar = ({ uploadedDocs, onFileUpload, onRemoveDoc, maxFiles = 10 }) => 
   );
 };
 
-export default Sidebar; 
+export default Sidebar;
