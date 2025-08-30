@@ -7,127 +7,81 @@ const FileUpload = ({ onFileUpload, maxFiles = 10, className = '' }) => {
   const [error, setError] = useState('');
   const fileInputRef = useRef(null);
 
-  // Supported file types
-  const supportedTypes = [
-    'application/pdf',
-    'application/vnd.openxmlformats-officedocument.wordprocessingml.document', // .docx
-    'application/msword', // .doc
-    'application/vnd.openxmlformats-officedocument.presentationml.presentation', // .pptx
-    'application/vnd.ms-powerpoint', // .ppt
-    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', // .xlsx
-    'application/vnd.ms-excel', // .xls
-    'text/plain', // .txt
-    'image/jpeg', // .jpg, .jpeg
-    'image/png', // .png
-    'image/gif', // .gif
-    'image/webp', // .webp
-    'image/svg+xml' // .svg
+  // Allow all types; show an example list for users (not enforced here).
+  const humanExamples = [
+    'PDF, DOCX/DOC, PPTX/PPT, XLSX/XLS',
+    'TXT/MD/CSV/JSON',
+    'Images (JPG/PNG/GIF/WebP/SVG)',
+    'ODT/ODS/ODP and more…',
   ];
 
-  const handleDragOver = (e) => {
-    e.preventDefault();
-    setIsDragOver(true);
-    setError('');
+  const MAX = 25 * 1024 * 1024;
+
+  const limitAndValidate = (files) => {
+    const small = files.filter(f => f.size <= MAX);
+    if (files.length && small.length !== files.length) {
+      setError('Some files exceeded the 25MB limit and were skipped.');
+    }
+    return small.slice(0, maxFiles);
   };
 
-  const handleDragLeave = (e) => {
-    e.preventDefault();
-    setIsDragOver(false);
-  };
+  const handleDragOver = (e) => { e.preventDefault(); setIsDragOver(true); setError(''); };
+  const handleDragLeave = (e) => { e.preventDefault(); setIsDragOver(false); };
 
   const handleDrop = (e) => {
     e.preventDefault();
     setIsDragOver(false);
-    
-    const files = Array.from(e.dataTransfer.files);
-    const validFiles = files.filter(file => supportedTypes.includes(file.type));
-    
-    if (validFiles.length === 0) {
-      setError('Please drop only supported file types (PDF, DOC, DOCX, PPT, XLS, TXT, Images)');
-      return;
-    }
-    
-    if (validFiles.length > maxFiles) {
-      setError(`Maximum ${maxFiles} files allowed`);
-      return;
-    }
-    
-    setError('');
-    onFileUpload(validFiles);
+    const files = Array.from(e.dataTransfer.files || []);
+    const accepted = limitAndValidate(files);
+    if (accepted.length) onFileUpload(accepted);
   };
 
   const handleFileSelect = (e) => {
-    const files = Array.from(e.target.files);
-    const validFiles = files.filter(file => supportedTypes.includes(file.type));
-    
-    if (validFiles.length === 0) {
-      setError('Please select only supported file types (PDF, DOC, DOCX, PPT, XLS, TXT, Images)');
-      return;
-    }
-    
-    if (validFiles.length > maxFiles) {
-      setError(`Maximum ${maxFiles} files allowed`);
-      return;
-    }
-    
-    setError('');
-    onFileUpload(validFiles);
-    
-    // Reset input value
-    e.target.value = '';
+    const files = Array.from(e.target.files || []);
+    const accepted = limitAndValidate(files);
+    if (accepted.length) onFileUpload(accepted);
+    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   return (
     <div className={className}>
       <div
         className={`relative border-2 border-dashed rounded-lg p-6 text-center transition-all duration-200 ${
-          isDragOver 
-            ? 'border-primary-400 bg-primary-50' 
-            : 'border-academic-300 hover:border-academic-400'
+          isDragOver ? 'border-primary-400 bg-primary-50' : 'border-academic-300 hover:border-academic-400'
         }`}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
       >
-        <Upload className={`w-8 h-8 mx-auto mb-3 ${
-          isDragOver ? 'text-primary-500' : 'text-academic-400'
-        }`} />
-        
-        <p className="text-sm text-academic-600 mb-3">
-          {isDragOver ? 'Drop files here' : 'Drag & drop files here'}
-        </p>
-        
+        <Upload className={`w-8 h-8 mx-auto mb-3 ${isDragOver ? 'text-primary-500' : 'text-academic-400'}`} />
+        <p className="text-sm text-academic-700">Drag & drop files here, or</p>
         <button
+          type="button"
           onClick={() => fileInputRef.current?.click()}
-          className="btn-primary text-sm"
+          className="mt-2 text-sm px-3 py-1.5 rounded bg-primary-600 text-white hover:bg-primary-700 transition-colors"
         >
-          Browse Files
+          Browse files
         </button>
-        
-        <p className="text-xs text-academic-500 mt-2">
-          Max {maxFiles} files • PDF, DOC, DOCX, PPT, XLS, TXT, Images
-        </p>
-        
         <input
           ref={fileInputRef}
           type="file"
           multiple
-          accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt,.jpg,.jpeg,.png,.gif,.webp,.svg"
-          onChange={handleFileSelect}
           className="hidden"
+          onChange={handleFileSelect}
         />
+
+        {error && (
+          <div className="mt-3 flex items-center gap-2 text-xs text-red-600">
+            <AlertCircle className="w-4 h-4" />
+            {error}
+          </div>
+        )}
+
+        <div className="mt-2 text-xs text-academic-500 space-y-1">
+          <div>Up to {maxFiles} files, 25MB each.</div>
+          <div>Examples: {humanExamples.join(' • ')}</div>
+        </div>
       </div>
-      
-      {error && (
-        <motion.div
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="flex items-center space-x-2 mt-3 p-3 bg-red-50 border border-red-200 rounded-lg"
-        >
-          <AlertCircle className="w-4 h-4 text-red-500" />
-          <span className="text-sm text-red-600">{error}</span>
-        </motion.div>
-      )}
     </div>
   );
 };

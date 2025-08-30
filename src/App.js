@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Navbar from './components/Navbar';
 import Sidebar from './components/Sidebar';
@@ -13,10 +13,9 @@ function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [gateOpen, setGateOpen] = useState(false);
   const [username, setUsername] = useState(localStorage.getItem('studymate_username') || '');
-
-  // Persisted chats (list) and current chat id
   const [chats, setChats] = useState([]);
   const [currentChatId, setCurrentChatId] = useState(null);
+  const [mobileView, setMobileView] = useState(window.innerWidth < 1024);
 
   const API_BASE = 'https://studymate-backend-beta.vercel.app';
 
@@ -28,11 +27,17 @@ function App() {
       fetchChats();
       setUsername(localStorage.getItem('studymate_username') || '');
     }
+
+    const handleResize = () => setMobileView(window.innerWidth < 1024);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
   }, []);
 
   const authHeaders = () => {
     const token = localStorage.getItem('studymate_token');
-    return token ? { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', Accept: 'application/json' } : { Accept: 'application/json' };
+    return token
+      ? { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', Accept: 'application/json' }
+      : { Accept: 'application/json' };
   };
 
   async function fetchChats() {
@@ -42,7 +47,9 @@ function App() {
       const res = await fetch(`${API_BASE}/api/history/chats`, { headers });
       const data = await res.json();
       if (res.ok && data.ok !== false) setChats(data.chats || []);
-    } catch {}
+    } catch (error) {
+      console.error('Error fetching chats:', error);
+    }
   }
 
   async function createChatIfNeeded(firstUserMessage) {
@@ -53,7 +60,10 @@ function App() {
       const res = await fetch(`${API_BASE}/api/history/chats`, {
         method: 'POST',
         headers,
-        body: JSON.stringify({ title: firstUserMessage?.content?.slice(0, 40) || 'New Chat', firstMessage: firstUserMessage })
+        body: JSON.stringify({
+          title: firstUserMessage?.content?.slice(0, 40) || 'New Chat',
+          firstMessage: firstUserMessage
+        })
       });
       const data = await res.json();
       if (res.ok && data.chatId) {
@@ -61,7 +71,9 @@ function App() {
         fetchChats();
         return data.chatId;
       }
-    } catch {}
+    } catch (error) {
+      console.error('Error creating chat:', error);
+    }
     return null;
   }
 
@@ -75,7 +87,9 @@ function App() {
         body: JSON.stringify({ messages })
       });
       fetchChats();
-    } catch {}
+    } catch (error) {
+      console.error('Error appending messages:', error);
+    }
   }
 
   async function loadChat(chatId) {
@@ -87,18 +101,27 @@ function App() {
       if (res.ok && data.chat) {
         setCurrentChatId(chatId);
         setChatHistory(data.chat.messages || []);
+        if (mobileView) setIsSidebarOpen(false);
       }
-    } catch {}
+    } catch (error) {
+      console.error('Error loading chat:', error);
+    }
   }
 
+  const startNewChat = () => {
+    setCurrentChatId(null);
+    setChatHistory([]);
+    if (mobileView) setIsSidebarOpen(false);
+  };
+
   const handleFileUpload = (files) => {
-    const newDocs = Array.from(files).map(file => ({
-      id: Date.now() + Math.random(),
+    const now = Date.now();
+    const newDocs = Array.from(files).map((file, idx) => ({
+      id: `${now}_${idx}_${Math.random()}`,
       name: file.name,
-      file: file,
+      file,
       size: file.size
     }));
-    
     setUploadedDocs(prev => [...prev, ...newDocs].slice(0, 10));
   };
 
@@ -122,6 +145,7 @@ function App() {
     try {
       const formData = new FormData();
       formData.append('messages', JSON.stringify([...chatHistory, userMessage]));
+      // Keep both keys for backward compatibility with earlier backend
       uploadedDocs.forEach(doc => {
         formData.append('files', doc.file);
         formData.append('pdfs', doc.file);
@@ -176,66 +200,168 @@ function App() {
     }
   };
 
-  const toggleSidebar = () => {
-    setIsSidebarOpen(!isSidebarOpen);
-  };
+  const toggleSidebar = () => setIsSidebarOpen(!isSidebarOpen);
 
   const onLoginClick = () => setGateOpen(true);
   const onLogoutClick = () => {
     localStorage.removeItem('studymate_token');
     localStorage.removeItem('studymate_username');
+    localStorage.removeItem('studymate_guest');
     setUsername('');
     setCurrentChatId(null);
     setChats([]);
+    setChatHistory([]);
   };
 
   return (
     <div className="min-h-screen bg-academic-50 flex flex-col">
-      <Navbar onMenuClick={toggleSidebar} onLoginClick={onLoginClick} onLogoutClick={onLogoutClick} username={username} />
-      
+      <Navbar
+        onMenuClick={toggleSidebar}
+        onLoginClick={onLoginClick}
+        onLogoutClick={onLogoutClick}
+        username={username}
+        onNewChat={startNewChat}
+        isSidebarOpen={isSidebarOpen}
+      />
+
       <div className="flex flex-1 overflow-hidden relative">
-        {/* Left column: sidebar + simple chat list */}
-        <div className="hidden lg:flex lg:flex-col w-80 bg-white border-r border-academic-200 flex-shrink-0">
+        {/* Desktop Sidebar */}
+        <div className={`hidden lg:flex lg:flex-col w-80 bg-white border-r border-academic-200 flex-shrink-0 ${isSidebarOpen ? 'flex' : 'hidden'}`}>
           <div className="p-4 border-b border-academic-200">
-            <h3 className="text-sm font-semibold text-academic-700 mb-2">Your Chats</h3>
-            <div className="space-y-2 max-h-48 overflow-y-auto">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-semibold text-academic-700">Your Chats</h3>
+              <button
+                onClick={startNewChat}
+                className="text-xs bg-primary-600 text-white px-2 py-1 rounded hover:bg-primary-700 transition-colors"
+              >
+                + New Chat
+              </button>
+            </div>
+            <div className="space-y-2 max-h-64 overflow-y-auto">
               {username && chats && chats.length > 0 ? (
                 chats.map(c => (
-                  <button key={c._id} onClick={() => loadChat(c._id)} className={`w-full text-left text-sm px-3 py-2 rounded-lg border ${currentChatId===c._id ? 'bg-primary-50 border-primary-200 text-primary-700' : 'bg-white border-academic-200 hover:bg-academic-50'}`}>
-                    {c.title || 'Untitled'}
+                  <button
+                    key={c._id}
+                    onClick={() => loadChat(c._id)}
+                    className={`w-full text-left text-sm px-3 py-2 rounded-lg border ${
+                      currentChatId === c._id
+                        ? 'bg-primary-50 border-primary-200 text-primary-700'
+                        : 'bg-white border-academic-200 hover:bg-academic-50'
+                    }`}
+                  >
+                    <div className="font-medium truncate">{c.title || 'Untitled'}</div>
+                    <div className="text-xs text-academic-500">
+                      {new Date(c.updatedAt).toLocaleDateString()}
+                    </div>
                   </button>
                 ))
               ) : (
-                <div className="text-xs text-academic-500">No saved chats</div>
+                <div className="text-xs text-academic-500 p-2 text-center">
+                  {username ? 'No saved chats yet' : 'Sign in to save chat history'}
+                </div>
               )}
             </div>
           </div>
           <div className="flex-1">
-            <Sidebar uploadedDocs={uploadedDocs} onFileUpload={handleFileUpload} onRemoveDoc={removeDocument} />
+            <Sidebar
+              uploadedDocs={uploadedDocs}
+              onFileUpload={handleFileUpload}
+              onRemoveDoc={removeDocument}
+            />
           </div>
         </div>
 
-        {/* Mobile sidebar overlay */}
+        {/* Mobile Sidebar (Drawer) */}
         <AnimatePresence>
           {isSidebarOpen && (
             <>
-              <motion.div key="backdrop" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }} onClick={() => setIsSidebarOpen(false)} className="fixed inset-0 bg-black/40 z-30 lg:hidden" />
-              <motion.div key="drawer" initial={{ x: -320 }} animate={{ x: 0 }} exit={{ x: -320 }} transition={{ duration: 0.25 }} className="fixed inset-y-0 left-0 w-80 bg-white border-r border-academic-200 z-40 lg:hidden shadow-xl">
-                <Sidebar uploadedDocs={uploadedDocs} onFileUpload={handleFileUpload} onRemoveDoc={removeDocument} />
+              <motion.div
+                key="backdrop"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.2 }}
+                onClick={() => setIsSidebarOpen(false)}
+                className="fixed inset-0 bg-black/40 z-30 lg:hidden"
+              />
+              <motion.div
+                key="drawer"
+                initial={{ x: -320 }}
+                animate={{ x: 0 }}
+                exit={{ x: -320 }}
+                transition={{ duration: 0.25 }}
+                className="fixed inset-y-0 left-0 w-80 bg-white border-r border-academic-200 z-40 lg:hidden shadow-xl flex flex-col"
+              >
+                <div className="p-4 border-b border-academic-200">
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-sm font-semibold text-academic-700">Your Chats</h3>
+                    <button
+                      onClick={startNewChat}
+                      className="text-xs bg-primary-600 text-white px-2 py-1 rounded hover:bg-primary-700 transition-colors"
+                    >
+                      + New Chat
+                    </button>
+                  </div>
+                  <div className="space-y-2 max-h-48 overflow-y-auto">
+                    {username && chats && chats.length > 0 ? (
+                      chats.map(c => (
+                        <button
+                          key={c._id}
+                          onClick={() => loadChat(c._id)}
+                          className={`w-full text-left text-sm px-3 py-2 rounded-lg border ${
+                            currentChatId === c._id
+                              ? 'bg-primary-50 border-primary-200 text-primary-700'
+                              : 'bg-white border-academic-200 hover:bg-academic-50'
+                          }`}
+                        >
+                          <div className="font-medium truncate">{c.title || 'Untitled'}</div>
+                          <div className="text-xs text-academic-500">
+                            {new Date(c.updatedAt).toLocaleDateString()}
+                          </div>
+                        </button>
+                      ))
+                    ) : (
+                      <div className="text-xs text-academic-500 p-2 text-center">
+                        {username ? 'No saved chats yet' : 'Sign in to save chat history'}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex-1 overflow-y-auto">
+                  <Sidebar
+                    uploadedDocs={uploadedDocs}
+                    onFileUpload={handleFileUpload}
+                    onRemoveDoc={removeDocument}
+                  />
+                </div>
               </motion.div>
             </>
           )}
         </AnimatePresence>
-        
+
         {/* Main content */}
         <div className="flex-1 flex flex-col min-w-0">
-          <ChatInterface chatHistory={chatHistory} onSendMessage={sendMessage} isLoading={isLoading} uploadedDocs={uploadedDocs} />
+          <ChatInterface
+            chatHistory={chatHistory}
+            onSendMessage={sendMessage}
+            isLoading={isLoading}
+            uploadedDocs={uploadedDocs}
+          />
         </div>
       </div>
-      
+
       <Footer />
 
-      <LoginGate isOpen={gateOpen} onClose={() => { setGateOpen(false); setUsername(localStorage.getItem('studymate_username') || ''); fetchChats(); }} onGuest={() => {}} />
+      <LoginGate
+        isOpen={gateOpen}
+        onClose={() => {
+          setGateOpen(false);
+          setUsername(localStorage.getItem('studymate_username') || '');
+          fetchChats();
+        }}
+        onGuest={() => {}}
+      />
     </div>
   );
 }
