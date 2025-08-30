@@ -15,7 +15,15 @@ const iconForMime = (mime = '') => {
   return <FileText className="w-4 h-4" />;
 };
 
-const ChatInterface = ({ chatHistory, onSendMessage, isLoading, uploadedDocs, onFileUpload, onRemoveDoc, maxFiles = 10 }) => {
+const ChatInterface = ({
+  chatHistory,
+  onSendMessage,
+  isLoading,
+  uploadedDocs,
+  onFileUpload,
+  onRemoveDoc,
+  maxFiles = 10,
+}) => {
   const [message, setMessage] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
@@ -37,16 +45,13 @@ const ChatInterface = ({ chatHistory, onSendMessage, isLoading, uploadedDocs, on
   }, [chatHistory]);
 
   useEffect(() => {
-    if (isLoading) {
-      setIsTyping(true);
-    } else {
-      setIsTyping(false);
-    }
+    setIsTyping(isLoading);
   }, [isLoading]);
 
   // Setup SpeechRecognition
   useEffect(() => {
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const SpeechRecognition =
+      window.SpeechRecognition || window.webkitSpeechRecognition;
     if (SpeechRecognition) {
       recognitionRef.current = new SpeechRecognition();
       recognitionRef.current.continuous = false;
@@ -75,10 +80,10 @@ const ChatInterface = ({ chatHistory, onSendMessage, isLoading, uploadedDocs, on
 
   const validateFiles = (files) => {
     const MAX = 25 * 1024 * 1024; // 25MB
-    const over = files.find(f => f.size > MAX);
+    const over = files.find((f) => f.size > MAX);
     if (over) {
       setError(`"${over.name}" exceeds 25MB limit.`);
-      return files.filter(f => f.size <= MAX);
+      return files.filter((f) => f.size <= MAX);
     }
     return files;
   };
@@ -142,7 +147,7 @@ const ChatInterface = ({ chatHistory, onSendMessage, isLoading, uploadedDocs, on
 
   const handleMicClick = () => {
     if (!recognitionRef.current) {
-      alert("Speech recognition not supported in this browser.");
+      alert('Speech recognition not supported in this browser.');
       return;
     }
     if (isListening) {
@@ -155,9 +160,9 @@ const ChatInterface = ({ chatHistory, onSendMessage, isLoading, uploadedDocs, on
   };
 
   const formatTimestamp = (timestamp) => {
-    return new Date(timestamp).toLocaleTimeString([], { 
-      hour: '2-digit', 
-      minute: '2-digit' 
+    return new Date(timestamp).toLocaleTimeString([], {
+      hour: '2-digit',
+      minute: '2-digit',
     });
   };
 
@@ -166,10 +171,14 @@ const ChatInterface = ({ chatHistory, onSendMessage, isLoading, uploadedDocs, on
       {/* Chat Header */}
       <div className="bg-white border-b border-academic-200 px-6 py-4 flex justify-between items-center">
         <div>
-          <h2 className="text-lg font-semibold text-academic-900">Chat with StudyMate</h2>
+          <h2 className="text-lg font-semibold text-academic-900">
+            Chat with StudyMate
+          </h2>
           <p className="text-sm text-academic-600">
-            {uploadedDocs.length > 0 
-              ? `${uploadedDocs.length} document${uploadedDocs.length > 1 ? 's' : ''} loaded`
+            {uploadedDocs.length > 0
+              ? `${uploadedDocs.length} document${
+                  uploadedDocs.length > 1 ? 's' : ''
+                } loaded`
               : 'No documents loaded'}
           </p>
         </div>
@@ -195,17 +204,25 @@ const ChatInterface = ({ chatHistory, onSendMessage, isLoading, uploadedDocs, on
                 Welcome to StudyMate!
               </h3>
               <p className="text-academic-600 max-w-md mx-auto">
-                Upload your academic documents and start asking questions. I'll help you understand 
-                the content and answer your queries.
+                Upload your academic documents and start asking questions. I'll
+                help you understand the content and answer your queries.
               </p>
             </motion.div>
           ) : (
             chatHistory.map((msg) => (
               <div
                 key={msg.id}
-                className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                className={`flex ${
+                  msg.role === 'user' ? 'justify-end' : 'justify-start'
+                }`}
               >
-                <div className={`max-w-3/4 rounded-lg p-4 ${msg.role === 'user' ? 'bg-primary-600 text-white' : 'bg-academic-100 text-academic-800'}`}>
+                <div
+                  className={`max-w-3/4 rounded-lg p-4 ${
+                    msg.role === 'user'
+                      ? 'bg-primary-600 text-white'
+                      : 'bg-academic-100 text-academic-800'
+                  }`}
+                >
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
                       <p className="whitespace-pre-wrap">{msg.content}</p>
@@ -241,11 +258,25 @@ const ChatInterface = ({ chatHistory, onSendMessage, isLoading, uploadedDocs, on
               <Bot className="w-4 h-4 text-primary-600" />
             </div>
             <div className="flex items-center space-x-1">
-              <span className="text-sm text-academic-600">StudyMate is thinking</span>
+              <span className="text-sm text-academic-600">
+                StudyMate is thinking
+              </span>
               <div className="flex space-x-1">
-                <motion.div className="w-2 h-2 bg-primary-400 rounded-full" animate={{ opacity: [0.4, 1, 0.4] }} transition={{ duration: 1.4, repeat: Infinity, delay: 0 }} />
-                <motion.div className="w-2 h-2 bg-primary-400 rounded-full" animate={{ opacity: [0.4, 1, 0.4] }} transition={{ duration: 1.4, repeat: Infinity, delay: 0.2 }} />
-                <motion.div className="w-2 h-2 bg-primary-400 rounded-full" animate={{ opacity: [0.4, 1, 0.4] }} transition={{ duration: 1.4, repeat: Infinity, delay: 0.4 }} />
+                <motion.div
+                  className="w-2 h-2 bg-primary-400 rounded-full"
+                  animate={{ opacity: [0.4, 1, 0.4] }}
+                  transition={{ duration: 1.4, repeat: Infinity, delay: 0 }}
+                />
+                <motion.div
+                  className="w-2 h-2 bg-primary-400 rounded-full"
+                  animate={{ opacity: [0.4, 1, 0.4] }}
+                  transition={{ duration: 1.4, repeat: Infinity, delay: 0.2 }}
+                />
+                <motion.div
+                  className="w-2 h-2 bg-primary-400 rounded-full"
+                  animate={{ opacity: [0.4, 1, 0.4] }}
+                  transition={{ duration: 1.4, repeat: Infinity, delay: 0.4 }}
+                />
               </div>
             </div>
           </motion.div>
@@ -264,8 +295,12 @@ const ChatInterface = ({ chatHistory, onSendMessage, isLoading, uploadedDocs, on
           >
             <motion.div className="bg-white rounded-2xl p-6 shadow-xl flex flex-col items-center">
               <Mic className="w-10 h-10 text-primary-600 animate-pulse" />
-              <p className="mt-3 text-lg font-medium text-academic-800">Listening...</p>
-              <p className="text-sm text-academic-500">Speak now and we’ll capture your message</p>
+              <p className="mt-3 text-lg font-medium text-academic-800">
+                Listening...
+              </p>
+              <p className="text-sm text-academic-500">
+                Speak now and we’ll capture your message
+              </p>
               <button
                 onClick={handleMicClick}
                 className="mt-4 px-4 py-2 rounded bg-red-500 text-white hover:bg-red-600"
@@ -285,7 +320,9 @@ const ChatInterface = ({ chatHistory, onSendMessage, isLoading, uploadedDocs, on
             type="button"
             onClick={() => setShowFileUpload(!showFileUpload)}
             className={`p-2.5 rounded-lg transition-all duration-200 ${
-              showFileUpload ? 'bg-primary-600 text-white' : 'bg-academic-200 text-academic-600 hover:bg-academic-300'
+              showFileUpload
+                ? 'bg-primary-600 text-white'
+                : 'bg-academic-200 text-academic-600 hover:bg-academic-300'
             }`}
           >
             <Paperclip className="w-5 h-5" />
@@ -296,10 +333,16 @@ const ChatInterface = ({ chatHistory, onSendMessage, isLoading, uploadedDocs, on
             type="button"
             onClick={handleMicClick}
             className={`p-2.5 rounded-lg transition-all duration-200 ${
-              isListening ? 'bg-red-500 text-white' : 'bg-academic-200 text-academic-600 hover:bg-academic-300'
+              isListening
+                ? 'bg-red-500 text-white'
+                : 'bg-academic-200 text-academic-600 hover:bg-academic-300'
             }`}
           >
-            {isListening ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
+            {isListening ? (
+              <MicOff className="w-5 h-5" />
+            ) : (
+              <Mic className="w-5 h-5" />
+            )}
           </button>
 
           {/* Textarea */}
