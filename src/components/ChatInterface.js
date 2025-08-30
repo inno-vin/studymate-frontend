@@ -1,6 +1,6 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Send, Bot, FileText, Upload, X, Paperclip } from 'lucide-react';
+import { Send, Bot, FileText, Upload, X, Paperclip, Mic, MicOff, Volume2, VolumeX } from 'lucide-react';
 
 const prettyBytes = (bytes = 0) => {
   if (!bytes) return '0 Bytes';
@@ -21,9 +21,26 @@ const ChatInterface = ({ chatHistory, onSendMessage, isLoading, uploadedDocs, on
   const [isDragOver, setIsDragOver] = useState(false);
   const [error, setError] = useState('');
   const [showFileUpload, setShowFileUpload] = useState(false);
+  const [isListening, setIsListening] = useState(false);
+  const [isSpeaking, setIsSpeaking] = useState(false);
+  const [speechSupported, setSpeechSupported] = useState(true);
   const messagesEndRef = useRef(null);
   const textareaRef = useRef(null);
   const fileInputRef = useRef(null);
+  const recognitionRef = useRef(null);
+  const synthesisRef = useRef(null);
+
+  // Check if speech APIs are supported
+  useEffect(() => {
+    if (!('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)) {
+      setSpeechSupported(false);
+      console.warn('Speech recognition not supported in this browser');
+    }
+    
+    if (!('speechSynthesis' in window)) {
+      console.warn('Speech synthesis not supported in this browser');
+    }
+  }, []);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -40,6 +57,103 @@ const ChatInterface = ({ chatHistory, onSendMessage, isLoading, uploadedDocs, on
       setIsTyping(false);
     }
   }, [isLoading]);
+
+  // Initialize speech recognition
+  const initSpeechRecognition = () => {
+    if (!speechSupported) return;
+    
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    recognitionRef.current = new SpeechRecognition();
+    recognitionRef.current.continuous = false;
+    recognitionRef.current.interimResults = true;
+    recognitionRef.current.lang = 'en-US';
+
+    recognitionRef.current.onstart = () => {
+      setIsListening(true);
+    };
+
+    recognitionRef.current.onresult = (event) => {
+      const transcript = Array.from(event.results)
+        .map(result => result[0])
+        .map(result => result.transcript)
+        .join('');
+      
+      setMessage(transcript);
+    };
+
+    recognitionRef.current.onerror = (event) => {
+      console.error('Speech recognition error', event.error);
+      setIsListening(false);
+    };
+
+    recognitionRef.current.onend = () => {
+      setIsListening(false);
+    };
+  };
+
+  // Toggle speech recognition
+  const toggleListening = () => {
+    if (!speechSupported) {
+      alert('Speech recognition is not supported in your browser');
+      return;
+    }
+
+    if (isListening) {
+      recognitionRef.current.stop();
+    } else {
+      if (!recognitionRef.current) {
+        initSpeechRecognition();
+      }
+      recognitionRef.current.start();
+    }
+  };
+
+  // Speak text using speech synthesis
+  const speakText = (text) => {
+    if (!('speechSynthesis' in window)) return;
+    
+    // Stop any ongoing speech
+    window.speechSynthesis.cancel();
+    
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.rate = 0.9;
+    utterance.pitch = 1;
+    utterance.volume = 1;
+    
+    utterance.onstart = () => {
+      setIsSpeaking(true);
+    };
+    
+    utterance.onend = () => {
+      setIsSpeaking(false);
+    };
+    
+    utterance.onerror = () => {
+      setIsSpeaking(false);
+    };
+    
+    synthesisRef.current = utterance;
+    window.speechSynthesis.speak(utterance);
+  };
+
+  // Stop speaking
+  const stopSpeaking = () => {
+    if (window.speechSynthesis) {
+      window.speechSynthesis.cancel();
+      setIsSpeaking(false);
+    }
+  };
+
+  // Auto-speak the last assistant message
+  useEffect(() => {
+    if (chatHistory.length > 0) {
+      const lastMessage = chatHistory[chatHistory.length - 1];
+      if (lastMessage.role === 'assistant' && !lastMessage.isError) {
+        // Speak the assistant's response
+        speakText(lastMessage.content);
+      }
+    }
+  }, [chatHistory]);
 
   // File upload functions
   const enforceLimit = (files) => {
@@ -140,14 +254,39 @@ const ChatInterface = ({ chatHistory, onSendMessage, isLoading, uploadedDocs, on
             </p>
           </div>
           
-          {uploadedDocs.length > 0 && (
+          <div className="flex items-center space-x-3">
+            {uploadedDocs.length > 0 && (
+              <div className="flex items-center space-x-2">
+                <FileText className="w-4 h-4 text-primary-500" />
+                <span className="text-sm text-academic-600">
+                  PDF Context Active
+                </span>
+              </div>
+            )}
+            
+            {/* Voice controls */}
             <div className="flex items-center space-x-2">
-              <FileText className="w-4 h-4 text-primary-500" />
-              <span className="text-sm text-academic-600">
-                PDF Context Active
-              </span>
+              <button
+                onClick={isSpeaking ? stopSpeaking : () => {
+                  const lastAssistantMessage = [...chatHistory]
+                    .reverse()
+                    .find(msg => msg.role === 'assistant' && !msg.isError);
+                  
+                  if (lastAssistantMessage) {
+                    speakText(lastAssistantMessage.content);
+                  }
+                }}
+                disabled={!chatHistory.some(msg => msg.role === 'assistant' && !msg.isError)}
+                className={`p-2 rounded-full ${isSpeaking 
+                  ? 'bg-red-100 text-red-600' 
+                  : 'bg-academic-100 text-academic-600 hover:bg-academic-200'
+                } ${!chatHistory.some(msg => msg.role === 'assistant' && !msg.isError) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                title={isSpeaking ? 'Stop speaking' : 'Read last response'}
+              >
+                {isSpeaking ? <VolumeX size={16} /> : <Volume2 size={16} />}
+              </button>
             </div>
-          )}
+          </div>
         </div>
       </div>
 
@@ -168,6 +307,11 @@ const ChatInterface = ({ chatHistory, onSendMessage, isLoading, uploadedDocs, on
                 Upload your academic documents and start asking questions. I'll help you understand 
                 the content and answer your queries based on the uploaded materials.
               </p>
+              {speechSupported && (
+                <p className="text-academic-500 text-sm mt-4">
+                  Use the microphone button to ask questions by voice
+                </p>
+              )}
             </motion.div>
           ) : (
             chatHistory.map((msg, index) => (
@@ -227,6 +371,39 @@ const ChatInterface = ({ chatHistory, onSendMessage, isLoading, uploadedDocs, on
                   className="w-2 h-2 bg-primary-400 rounded-full"
                   animate={{ opacity: [0.4, 1, 0.4] }}
                   transition={{ duration: 1.4, repeat: Infinity, delay: 0.4 }}
+                />
+              </div>
+            </div>
+          </motion.div>
+        )}
+
+        {/* Listening Indicator */}
+        {isListening && (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="flex items-center space-x-3 p-4 bg-blue-50 rounded-lg border border-blue-200"
+          >
+            <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+              <Mic className="w-4 h-4 text-blue-600" />
+            </div>
+            <div className="flex items-center space-x-1">
+              <span className="text-sm text-blue-600">Listening...</span>
+              <div className="flex space-x-1">
+                <motion.div
+                  className="w-2 h-2 bg-blue-400 rounded-full"
+                  animate={{ scale: [1, 1.5, 1] }}
+                  transition={{ duration: 1, repeat: Infinity, delay: 0 }}
+                />
+                <motion.div
+                  className="w-2 h-2 bg-blue-400 rounded-full"
+                  animate={{ scale: [1, 1.5, 1] }}
+                  transition={{ duration: 1, repeat: Infinity, delay: 0.2 }}
+                />
+                <motion.div
+                  className="w-2 h-2 bg-blue-400 rounded-full"
+                  animate={{ scale: [1, 1.5, 1] }}
+                  transition={{ duration: 1, repeat: Infinity, delay: 0.4 }}
                 />
               </div>
             </div>
@@ -337,6 +514,24 @@ const ChatInterface = ({ chatHistory, onSendMessage, isLoading, uploadedDocs, on
           >
             <Paperclip className="w-5 h-5" />
           </button>
+          
+          {/* Microphone Button */}
+          {speechSupported && (
+            <motion.button
+              type="button"
+              onClick={toggleListening}
+              disabled={isLoading}
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              className={`p-2.5 rounded-lg transition-all duration-200 ${
+                isListening
+                  ? 'bg-red-600 hover:bg-red-700 text-white'
+                  : 'bg-academic-200 hover:bg-academic-300 text-academic-700'
+              } ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
+            >
+              {isListening ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
+            </motion.button>
+          )}
           
           <div className="flex-1 relative">
             <textarea
