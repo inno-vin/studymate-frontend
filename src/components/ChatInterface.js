@@ -1,13 +1,15 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Send, Bot, FileText } from 'lucide-react';
+import { Send, Bot, FileText, Mic, MicOff } from 'lucide-react';
 import ChatMessage from './ChatMessage';
 
 const ChatInterface = ({ chatHistory, onSendMessage, isLoading, uploadedDocs }) => {
   const [message, setMessage] = useState('');
   const [isTyping, setIsTyping] = useState(false);
+  const [listening, setListening] = useState(false);
   const messagesEndRef = useRef(null);
   const textareaRef = useRef(null);
+  const recognitionRef = useRef(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -30,8 +32,6 @@ const ChatInterface = ({ chatHistory, onSendMessage, isLoading, uploadedDocs }) 
     if (message.trim() && !isLoading) {
       onSendMessage(message.trim());
       setMessage('');
-      
-      // Reset textarea height
       if (textareaRef.current) {
         textareaRef.current.style.height = 'auto';
       }
@@ -47,8 +47,6 @@ const ChatInterface = ({ chatHistory, onSendMessage, isLoading, uploadedDocs }) 
 
   const handleTextareaChange = (e) => {
     setMessage(e.target.value);
-    
-    // Auto-resize textarea
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
       textareaRef.current.style.height = `${e.target.scrollHeight}px`;
@@ -60,6 +58,38 @@ const ChatInterface = ({ chatHistory, onSendMessage, isLoading, uploadedDocs }) 
       hour: '2-digit', 
       minute: '2-digit' 
     });
+  };
+
+  // 🎙️ Voice Assistant Logic
+  useEffect(() => {
+    if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      recognitionRef.current = new SpeechRecognition();
+      recognitionRef.current.continuous = false;
+      recognitionRef.current.interimResults = false;
+      recognitionRef.current.lang = 'en-US';
+
+      recognitionRef.current.onresult = (event) => {
+        const transcript = event.results[0][0].transcript;
+        setMessage(transcript);
+        setListening(false);
+      };
+
+      recognitionRef.current.onend = () => {
+        setListening(false);
+      };
+    }
+  }, []);
+
+  const handleVoiceInput = () => {
+    if (!recognitionRef.current) return alert("Voice recognition not supported in this browser.");
+    if (!listening) {
+      recognitionRef.current.start();
+      setListening(true);
+    } else {
+      recognitionRef.current.stop();
+      setListening(false);
+    }
   };
 
   return (
@@ -76,7 +106,6 @@ const ChatInterface = ({ chatHistory, onSendMessage, isLoading, uploadedDocs }) 
               }
             </p>
           </div>
-          
           {uploadedDocs.length > 0 && (
             <div className="flex items-center space-x-2">
               <FileText className="w-4 h-4 text-primary-500" />
@@ -172,7 +201,21 @@ const ChatInterface = ({ chatHistory, onSendMessage, isLoading, uploadedDocs }) 
               Press Enter to send, Shift+Enter for new line
             </div>
           </div>
+
+          {/* 🎙️ Voice Button */}
+          <motion.button
+            type="button"
+            onClick={handleVoiceInput}
+            whileHover={{ scale: 1.1 }}
+            whileTap={{ scale: 0.95 }}
+            className={`p-3 rounded-lg transition-all duration-200 ${
+              listening ? 'bg-red-500 text-white' : 'bg-academic-200 text-academic-600'
+            }`}
+          >
+            {listening ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
+          </motion.button>
           
+          {/* Send Button */}
           <motion.button
             type="submit"
             disabled={!message.trim() || isLoading}
