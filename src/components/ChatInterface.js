@@ -202,7 +202,7 @@ const ChatInterface = ({ chatHistory, onSendMessage, isLoading, uploadedDocs }) 
       </AnimatePresence>
 
       {/* Message Input */}
-      // <div className="bg-white border-t border-academic-200 px-6 py-4">
+      {/* <div className="bg-white border-t border-academic-200 px-6 py-4">*/}
 <div className="bg-white border-t border-academic-200 px-6 py-4 sticky bottom-0">
         <form onSubmit={handleSubmit} className="flex items-end space-x-3">
           
@@ -230,9 +230,9 @@ const ChatInterface = ({ chatHistory, onSendMessage, isLoading, uploadedDocs }) 
               rows={1}
               disabled={isLoading}
             />
-            // <div className="absolute bottom-2 right-2 text-xs text-academic-400">
-            //   Press Enter to send, Shift+Enter for new line
-            // </div>
+            {/* <div className="absolute bottom-2 right-2 text-xs text-academic-400">
+              Press Enter to send, Shift+Enter for new line
+            </div>*/}
           </div>
 
           {/* Send Button */}
