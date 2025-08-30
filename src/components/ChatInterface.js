@@ -1,4 +1,4 @@
-  import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Send, Bot, FileText } from 'lucide-react';
 import ChatMessage from './ChatMessage';
@@ -192,4 +192,4 @@ const ChatInterface = ({ chatHistory, onSendMessage, isLoading, uploadedDocs }) 
   );
 };
 
-export default ChatInterface; 
+export default ChatInterface;
